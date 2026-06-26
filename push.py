@@ -1,12 +1,18 @@
+import base64
+import hashlib
+import hmac
 import json
 import logging
 import os
 import random
 import time
+import urllib.parse
 
 import requests
 
 from config import (
+    DINGTALK_SECRET,
+    DINGTALK_WEBHOOK,
     PUSHPLUS_TOKEN,
     SERVERCHAN_SPT,
     TELEGRAM_BOT_TOKEN,
@@ -110,6 +116,57 @@ class PushNotification:
                     time.sleep(sleep_time)
         return False
 
+    def push_dingtalk(self, content, webhook, secret, is_success):
+        attempts = 5
+        title = f"微信阅读-{'成功' if is_success else '失败'}"
+        try:
+            url = self._build_dingtalk_url(webhook, secret)
+        except ValueError as exc:
+            logger.error("DingTalk 推送失败: %s", exc)
+            return False
+
+        payload = {
+            "msgtype": "text",
+            "text": {
+                "content": f"{title}\n{content}",
+            },
+        }
+
+        for attempt in range(attempts):
+            try:
+                response = requests.post(url, json=payload, headers=self.headers, timeout=10)
+                response.raise_for_status()
+                result = response.json()
+                if result.get("errcode") != 0:
+                    raise requests.exceptions.RequestException(result.get("errmsg", response.text))
+                logger.info("DingTalk 响应: %s", response.text)
+                return True
+            except (ValueError, requests.exceptions.RequestException) as exc:
+                logger.error("DingTalk 推送失败: %s", exc)
+                if attempt < attempts - 1:
+                    sleep_time = random.randint(180, 360)
+                    logger.info("%d 秒后重试...", sleep_time)
+                    time.sleep(sleep_time)
+        return False
+
+    @staticmethod
+    def _build_dingtalk_url(webhook, secret):
+        if not webhook:
+            raise ValueError("未配置 DINGTALK_WEBHOOK")
+        if not secret:
+            return webhook
+
+        timestamp = str(round(time.time() * 1000))
+        string_to_sign = f"{timestamp}\n{secret}"
+        hmac_code = hmac.new(
+            secret.encode("utf-8"),
+            string_to_sign.encode("utf-8"),
+            digestmod=hashlib.sha256,
+        ).digest()
+        sign = urllib.parse.quote_plus(base64.b64encode(hmac_code).decode("utf-8"))
+        separator = "&" if "?" in webhook else "?"
+        return f"{webhook}{separator}timestamp={timestamp}&sign={sign}"
+
 
 def push(content, method, is_success = True):
     notifier = PushNotification()
@@ -118,7 +175,7 @@ def push(content, method, is_success = True):
         logger.warning("未配置推送渠道，跳过推送。")
         return False
 
-    method = str(method).lower()
+    method = str(method).strip().lower()
 
     if method == "pushplus":
         return notifier.push_pushplus(content, PUSHPLUS_TOKEN, is_success)
@@ -128,6 +185,8 @@ def push(content, method, is_success = True):
         return notifier.push_wxpusher(content, WXPUSHER_SPT)
     if method == "serverchan":
         return notifier.push_serverChan(content, SERVERCHAN_SPT, is_success)
+    if method == "dingtalk":
+        return notifier.push_dingtalk(content, DINGTALK_WEBHOOK, DINGTALK_SECRET, is_success)
 
-    logger.warning("无效的通知渠道 '%s'，已跳过推送。支持：pushplus、telegram、wxpusher、serverchan", method)
+    logger.warning("无效的通知渠道 '%s'，已跳过推送。支持：pushplus、telegram、wxpusher、serverchan、dingtalk", method)
     return False

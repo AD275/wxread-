@@ -9,8 +9,10 @@ import re
 
 # 阅读次数 默认40次/20分钟
 READ_NUM = int(os.getenv('READ_NUM') or 40)
-# 需要推送时可选，可选pushplus、wxpusher、telegram
+# 需要推送时可选，可选pushplus、wxpusher、telegram、serverchan、dingtalk
 PUSH_METHOD = "" or os.getenv('PUSH_METHOD')
+# 推送类型：all=成功和失败都推送，fail_only=仅失败时推送
+PUSH_NOTIFY_TYPE = os.getenv("PUSH_NOTIFY_TYPE") or "all"
 # pushplus推送时需填
 PUSHPLUS_TOKEN = "" or os.getenv("PUSHPLUS_TOKEN")
 # telegram推送时需填
@@ -20,6 +22,9 @@ TELEGRAM_CHAT_ID = "" or os.getenv("TELEGRAM_CHAT_ID")
 WXPUSHER_SPT = "" or os.getenv("WXPUSHER_SPT")
 # SeverChan推送时需填
 SERVERCHAN_SPT = "" or os.getenv("SERVERCHAN_SPT")
+# 钉钉群机器人推送时需填，DINGTALK_SECRET 为加签密钥
+DINGTALK_WEBHOOK = "" or os.getenv("DINGTALK_WEBHOOK")
+DINGTALK_SECRET = "" or os.getenv("DINGTALK_SECRET")
 
 
 # read接口的bash命令，本地部署时可对应替换headers、cookies
